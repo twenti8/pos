@@ -4,6 +4,7 @@ import {
   OrderRecord,
   PaymentMethod,
   Product,
+  SessionUser,
   ShopSettings,
   ThemePresetId,
   UserAccount,
@@ -222,7 +223,10 @@ export function normalizeUser(raw: Record<string, unknown>, index = 0): UserAcco
   const roleRaw = String(raw.role ?? 'staff').toLowerCase();
   const role: UserRole = roleRaw === 'admin' ? 'admin' : 'staff';
   const username = String(raw.username ?? raw.user ?? `user${index + 1}`).trim();
-  const displayName = String(raw.displayName ?? raw.name ?? username).trim();
+  const displayName =
+    String(raw.name ?? '').trim() ||
+    String(raw.displayName ?? '').trim() ||
+    username;
   return {
     id: String(raw.id ?? username),
     username,
@@ -240,7 +244,11 @@ export function normalizeOrder(raw: Record<string, unknown>, index = 0): OrderRe
   const pmRaw = String(raw.paymentMethod ?? 'cash').toLowerCase();
   const paymentMethod: PaymentMethod =
     pmRaw.includes('prompt') || pmRaw.includes('qr') || pmRaw.includes('โอน') ? 'promptpay' : 'cash';
-  const cashierName = String(raw.cashierName ?? raw.cashier ?? 'พนักงาน');
+  const cashierName =
+    String(raw.cashierName ?? '').trim() ||
+    String(raw.cashier ?? '').trim() ||
+    String(raw.staffName ?? '').trim() ||
+    'Staff';
   const createdAt = raw.createdAt
     ? String(raw.createdAt)
     : raw.timestamp
@@ -316,4 +324,39 @@ export function canDeleteUserAccount(
   }
   return { allowed: true };
 }
+
+export function resolveCashierName(
+  user: { name?: string; displayName?: string; username?: string } | null | undefined,
+  fallback = 'Staff'
+): string {
+  const byName = String(user?.name ?? '').trim();
+  if (byName) return byName;
+  const byDisplayName = String(user?.displayName ?? '').trim();
+  if (byDisplayName) return byDisplayName;
+  const byUsername = String(user?.username ?? '').trim();
+  if (byUsername) return byUsername;
+  return fallback;
+}
+
+export function normalizeSessionUser(
+  raw: Record<string, unknown> | null | undefined,
+  fallbackUsername = ''
+): SessionUser | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const username = String(raw.username ?? raw.user ?? fallbackUsername).trim();
+  if (!username) return null;
+  const roleRaw = String(raw.role ?? 'staff').toLowerCase();
+  const role: UserRole = roleRaw === 'admin' ? 'admin' : 'staff';
+  const resolvedName =
+    String(raw.name ?? '').trim() ||
+    String(raw.displayName ?? '').trim() ||
+    username;
+  return {
+    username,
+    name: resolvedName,
+    displayName: resolvedName,
+    role,
+  };
+}
+
 

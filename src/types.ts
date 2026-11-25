@@ -55,6 +55,7 @@ export interface UserAccount {
 
 export interface SessionUser {
   username: string;
+  name: string;
   displayName: string;
   role: UserRole;
 }

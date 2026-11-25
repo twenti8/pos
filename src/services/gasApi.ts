@@ -2,6 +2,7 @@ import { OrderRecord, Product, SessionUser, ShopSettings, UserAccount } from '..
 import {
   normalizeOrder,
   normalizeProduct,
+  normalizeSessionUser,
   normalizeSettings,
   normalizeUser,
 } from '../utils/posLogic';
@@ -156,16 +157,17 @@ export async function loginWithGas(
       ? (res.data.data as Record<string, unknown>)
       : res.data) as Record<string, unknown>;
 
-  const roleRaw = String(root.role ?? 'staff').toLowerCase();
-  const role = roleRaw === 'admin' ? 'admin' : 'staff';
-  const resolvedUsername = String(root.username ?? username).trim();
-  const displayName = String(root.displayName ?? root.name ?? resolvedUsername).trim();
+  const normalized = normalizeSessionUser(root, username.trim());
+  const resolvedUsername = normalized?.username || username.trim();
+  const resolvedName = normalized?.name || resolvedUsername;
+  const role = normalized?.role || 'staff';
 
   return {
     ok: true,
     user: {
       username: resolvedUsername,
-      displayName,
+      name: resolvedName,
+      displayName: resolvedName,
       role,
     },
   };
@@ -194,13 +196,15 @@ export async function fetchUsersFromCloud(): Promise<{
 }
 
 export async function saveUserToCloud(user: UserAccount): Promise<GasResponse> {
+  const cleanName = user.displayName?.trim() || user.username;
   return postGas({
     action: 'saveUser',
-    user,
+    user: { ...user, name: cleanName, displayName: cleanName },
     id: user.id,
     username: user.username,
     password: user.password,
-    displayName: user.displayName,
+    name: cleanName,
+    displayName: cleanName,
     role: user.role,
   });
 }

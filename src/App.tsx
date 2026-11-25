@@ -23,6 +23,8 @@ import {
   canDeleteUserAccount,
   extractCategories,
   generateReceiptId,
+  normalizeSessionUser,
+  resolveCashierName,
   resolveDocumentTitle,
 } from './utils/posLogic';
 import {
@@ -98,19 +100,22 @@ export default function App() {
     const cached = readStorage<UserAccount[]>(STORAGE_KEYS.users, []);
     return cached.length > 0 ? cached : DEFAULT_USERS;
   });
-  const [sessionUser, setSessionUser] = useState<SessionUser | null>(() => {
+  const [currentUser, setCurrentUser] = useState<SessionUser | null>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('autostart') === '1') {
         const roleParam = params.get('role') === 'staff' ? 'staff' : 'admin';
+        const defaultName = roleParam === 'admin' ? 'ผู้ดูแลร้าน' : 'พนักงานหน้าร้าน';
         return {
           username: roleParam,
-          displayName: roleParam === 'admin' ? 'ผู้ดูแลร้าน' : 'พนักงานหน้าร้าน',
+          name: defaultName,
+          displayName: defaultName,
           role: roleParam,
         };
       }
     }
-    return readStorage<SessionUser | null>(STORAGE_KEYS.session, null);
+    const stored = readStorage<Record<string, unknown> | null>(STORAGE_KEYS.session, null);
+    return normalizeSessionUser(stored);
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('pos');
@@ -235,10 +240,10 @@ export default function App() {
 
   // Ensure staff cannot stay on admin tabs
   useEffect(() => {
-    if (sessionUser?.role === 'staff' && activeTab !== 'pos') {
+    if (currentUser?.role === 'staff' && activeTab !== 'pos') {
       setActiveTab('pos');
     }
-  }, [sessionUser, activeTab]);
+  }, [currentUser, activeTab]);
 
   const categories = useMemo(
     () => extractCategories(products, settings.categories),
@@ -249,10 +254,17 @@ export default function App() {
     const res = await loginWithGas(username, password);
 
     if (res.ok && res.user) {
-      setSessionUser(res.user);
-      writeStorage(STORAGE_KEYS.session, res.user);
+      const resolvedDisplayName = resolveCashierName(res.user, res.user.username);
+      const loggedInUser: SessionUser = {
+        username: res.user.username,
+        name: resolvedDisplayName,
+        displayName: resolvedDisplayName,
+        role: res.user.role,
+      };
+      setCurrentUser(loggedInUser);
+      writeStorage(STORAGE_KEYS.session, loggedInUser);
       setActiveTab('pos');
-      notify('success', `ยินดีต้อนรับคุณ ${res.user.displayName}`);
+      notify('success', `ยินดีต้อนรับคุณ ${loggedInUser.name}`);
       // Sync immediately right after login so every device has latest cloud state
       void loadInitDataFromCloud(true);
       return null;
@@ -266,15 +278,17 @@ export default function App() {
           (u.password === password || (u.username === 'admin' && password === '1234'))
       );
       if (localMatch) {
+        const resolvedDisplayName = resolveCashierName(localMatch, localMatch.username);
         const offlineUser: SessionUser = {
           username: localMatch.username,
-          displayName: localMatch.displayName,
+          name: resolvedDisplayName,
+          displayName: resolvedDisplayName,
           role: localMatch.role,
         };
-        setSessionUser(offlineUser);
+        setCurrentUser(offlineUser);
         writeStorage(STORAGE_KEYS.session, offlineUser);
         setActiveTab('pos');
-        notify('info', `เข้าสู่ระบบแบบออฟไลน์ในชื่อ ${offlineUser.displayName}`);
+        notify('info', `เข้าสู่ระบบแบบออฟไลน์ในชื่อ ${offlineUser.name}`);
         return null;
       }
     }
@@ -283,7 +297,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setSessionUser(null);
+    setCurrentUser(null);
     setCart([]);
     setActiveTab('pos');
     try {
@@ -339,7 +353,7 @@ export default function App() {
     cashReceived?: number;
     changeAmount?: number;
   }) => {
-    if (cart.length === 0 || !sessionUser) return;
+    if (cart.length === 0 || !currentUser) return;
 
     const { netTotal } = calculateCartTotals(cart);
     const items = cart.map((item) => ({
@@ -350,6 +364,8 @@ export default function App() {
       subtotal: Math.round(item.product.price * item.quantity * 100) / 100,
     }));
 
+    const cashierDisplayName = resolveCashierName(currentUser, 'Staff');
+
     const newOrder: OrderRecord = {
       receiptId: generateReceiptId(),
       createdAt: new Date().toISOString(),
@@ -359,7 +375,7 @@ export default function App() {
       paymentMethod,
       cashReceived,
       changeAmount,
-      cashierName: sessionUser.displayName,
+      cashierName: cashierDisplayName,
       syncedToCloud: false,
     };
 
@@ -378,13 +394,16 @@ export default function App() {
       const targetOrder = orders.find((o) => o.receiptId === receiptId);
       if (!targetOrder) return;
 
+      const resolvedCashier =
+        resolveCashierName(currentUser, '') || targetOrder.cashierName?.trim() || '';
+
       const res = await saveOrderToCloud({
         receiptId: targetOrder.receiptId,
         itemsSummary: targetOrder.itemsSummary,
         netTotal: Number(targetOrder.netTotal),
         paymentMethod: targetOrder.paymentMethod === 'promptpay' ? 'PromptPay' : 'เงินสด',
         receiptImage: base64Png,
-        cashierName: targetOrder.cashierName,
+        cashierName: resolvedCashier,
       });
 
       if (res.ok) {
@@ -403,7 +422,7 @@ export default function App() {
         );
       }
     },
-    [orders, notify]
+    [orders, currentUser, notify]
   );
 
   // Admin: Save products & categories -> immediate POST saveProducts (+ saveSettings for categories)
@@ -521,7 +540,7 @@ export default function App() {
     <div className="min-h-screen bg-[var(--theme-bg)] text-[var(--theme-ink)]">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {!sessionUser ? (
+      {!currentUser ? (
         <LoginScreen
           settings={settings}
           isSyncingInit={isSyncingInit}
@@ -531,7 +550,7 @@ export default function App() {
         <>
           <HeaderNav
             settings={settings}
-            user={sessionUser}
+            user={currentUser}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
             onLogout={handleLogout}
@@ -556,7 +575,7 @@ export default function App() {
               products={products}
               categories={categories}
               cart={cart}
-              isAdmin={sessionUser.role === 'admin'}
+              isAdmin={currentUser.role === 'admin'}
               onAddToCart={handleAddToCart}
               onUpdateQty={handleUpdateCartQty}
               onRemoveItem={handleRemoveCartItem}
@@ -565,7 +584,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'sales' && sessionUser.role === 'admin' && (
+          {activeTab === 'sales' && currentUser.role === 'admin' && (
             <SalesSummaryView
               orders={orders}
               onViewReceipt={(order) => setActiveReceipt({ order, autoUpload: false })}
@@ -573,7 +592,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'products' && sessionUser.role === 'admin' && (
+          {activeTab === 'products' && currentUser.role === 'admin' && (
             <ProductsAdminView
               products={products}
               categories={categories}
@@ -582,9 +601,9 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'users' && sessionUser.role === 'admin' && (
+          {activeTab === 'users' && currentUser.role === 'admin' && (
             <UsersAdminView
-              currentUser={sessionUser}
+              currentUser={currentUser}
               users={users}
               isLoadingUsers={isLoadingUsers}
               onRefreshUsers={handleRefreshUsers}
@@ -594,7 +613,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'settings' && sessionUser.role === 'admin' && (
+          {activeTab === 'settings' && currentUser.role === 'admin' && (
             <SettingsAdminView
               settings={settings}
               onSaveSettings={handleSaveSettings}
@@ -608,6 +627,7 @@ export default function App() {
             <ReceiptModal
               order={activeReceipt.order}
               settings={settings}
+              currentUser={currentUser}
               autoUploadOnMount={activeReceipt.autoUpload}
               onClose={() => setActiveReceipt(null)}
               onReceiptImageReady={handleReceiptImageReady}

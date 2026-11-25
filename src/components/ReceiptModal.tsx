@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import html2canvas from 'html2canvas';
 import { Download, Printer, X, Loader2, CheckCircle2 } from 'lucide-react';
-import { OrderRecord, ShopSettings } from '../types';
+import { OrderRecord, SessionUser, ShopSettings } from '../types';
 import { DEFAULT_LOGO_PATH } from '../constants/themes';
-import { formatBaht, formatThaiDateTime } from '../utils/posLogic';
+import { formatBaht, formatThaiDateTime, resolveCashierName } from '../utils/posLogic';
 import { generatePromptPayPayload } from '../utils/promptpay';
 
 interface ReceiptModalProps {
   order: OrderRecord;
   settings: ShopSettings;
+  currentUser?: SessionUser | null;
   autoUploadOnMount?: boolean;
   onClose: () => void;
   onReceiptImageReady?: (receiptId: string, base64Png: string) => void;
@@ -19,6 +20,7 @@ interface ReceiptModalProps {
 export function ReceiptModal({
   order,
   settings,
+  currentUser,
   autoUploadOnMount = false,
   onClose,
   onReceiptImageReady,
@@ -214,7 +216,9 @@ export function ReceiptModal({
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-[#786D69]">พนักงานขาย</span>
-                <span className="text-[#231F1E]">{order.cashierName}</span>
+                <span data-testid="receipt-cashier-name" className="text-[#231F1E]">
+                  {order.cashierName?.trim() || resolveCashierName(currentUser, 'Staff')}
+                </span>
               </div>
             </div>
 

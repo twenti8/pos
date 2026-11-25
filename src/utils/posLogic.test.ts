@@ -10,7 +10,9 @@ import {
   generateReceiptId,
   getQuickCashAmounts,
   normalizeProduct,
+  normalizeSessionUser,
   normalizeSettings,
+  resolveCashierName,
   resolveDocumentTitle,
 } from './posLogic';
 import {
@@ -149,4 +151,27 @@ test('canDeleteUserAccount allows deleting default admin when another admin exis
   assert.equal(canDeleteUserAccount(defaultAdmin, [defaultAdmin, staffUser]).allowed, false);
   assert.equal(canDeleteUserAccount(secondAdmin, [secondAdmin, staffUser]).allowed, false);
 });
+
+test('resolveCashierName and normalizeSessionUser handle name, displayName, empty strings, and fallbacks', () => {
+  const fromGasWithEmptyDisplay = normalizeSessionUser(
+    { username: 'barista01', displayName: '', name: 'น้องพลอย', role: 'staff' },
+    'barista01'
+  );
+  assert.deepEqual(fromGasWithEmptyDisplay, {
+    username: 'barista01',
+    name: 'น้องพลอย',
+    displayName: 'น้องพลอย',
+    role: 'staff',
+  });
+
+  const fromGasUsernameOnly = normalizeSessionUser({ username: 'admin', name: '', role: 'admin' });
+  assert.equal(fromGasUsernameOnly?.name, 'admin');
+  assert.equal(fromGasUsernameOnly?.displayName, 'admin');
+
+  assert.equal(resolveCashierName({ name: 'น้องมายด์', username: 'staff01' }), 'น้องมายด์');
+  assert.equal(resolveCashierName({ name: '', displayName: '', username: 'staff01' }), 'staff01');
+  assert.equal(resolveCashierName(null, 'Staff'), 'Staff');
+  assert.equal(resolveCashierName(null, ''), '');
+});
+
 
