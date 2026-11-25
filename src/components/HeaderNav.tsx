@@ -85,8 +85,11 @@ export function HeaderNav({
 
           {/* Zone 3: Single primary session action */}
           <div className="flex items-center gap-3 shrink-0">
-            <span className="hidden sm:inline text-xs font-medium text-[var(--theme-muted)] whitespace-nowrap max-w-[140px] truncate">
-              {user.displayName} · {user.role === 'admin' ? 'แอดมิน' : 'พนักงาน'}
+            <span
+              data-testid="header-cashier-name"
+              className="hidden sm:inline text-xs font-medium text-[var(--theme-muted)] whitespace-nowrap max-w-[160px] truncate"
+            >
+              {user.name?.trim() || user.username} · {user.role === 'admin' ? 'แอดมิน' : 'พนักงาน'}
             </span>
             <button
               type="button"

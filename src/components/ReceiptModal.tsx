@@ -217,7 +217,15 @@ export function ReceiptModal({
               <div className="flex justify-between gap-2">
                 <span className="text-[#786D69]">พนักงานขาย</span>
                 <span data-testid="receipt-cashier-name" className="text-[#231F1E]">
-                  {order.cashierName?.trim() || resolveCashierName(currentUser, 'Staff')}
+                  {autoUploadOnMount
+                    ? currentUser?.name?.trim() ||
+                      order.cashierName?.trim() ||
+                      currentUser?.username?.trim() ||
+                      'Staff'
+                    : order.cashierName?.trim() ||
+                      currentUser?.name?.trim() ||
+                      currentUser?.username?.trim() ||
+                      'Staff'}
                 </span>
               </div>
             </div>

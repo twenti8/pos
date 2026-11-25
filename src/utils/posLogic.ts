@@ -220,18 +220,18 @@ export function normalizeSettings(raw: Record<string, unknown> | null | undefine
 }
 
 export function normalizeUser(raw: Record<string, unknown>, index = 0): UserAccount {
-  const roleRaw = String(raw.role ?? 'staff').toLowerCase();
+  const roleRaw = String(raw.role ?? raw.Role ?? 'staff').toLowerCase();
   const role: UserRole = roleRaw === 'admin' ? 'admin' : 'staff';
-  const username = String(raw.username ?? raw.user ?? `user${index + 1}`).trim();
-  const displayName =
-    String(raw.name ?? '').trim() ||
-    String(raw.displayName ?? '').trim() ||
-    username;
+  const username = String(raw.username ?? raw.Username ?? raw.user ?? `user${index + 1}`).trim();
+  const sheetName =
+    String(raw.name ?? raw.Name ?? '').trim() ||
+    String(raw.displayName ?? raw.DisplayName ?? '').trim();
   return {
-    id: String(raw.id ?? username),
+    id: String(raw.id ?? raw.Id ?? username),
     username,
     password: raw.password !== undefined ? String(raw.password) : undefined,
-    displayName,
+    name: sheetName,
+    displayName: sheetName || username,
     role,
     active: raw.active === undefined ? true : Boolean(raw.active),
   };
@@ -343,20 +343,49 @@ export function normalizeSessionUser(
   fallbackUsername = ''
 ): SessionUser | null {
   if (!raw || typeof raw !== 'object') return null;
-  const username = String(raw.username ?? raw.user ?? fallbackUsername).trim();
+  const username = String(raw.username ?? raw.Username ?? raw.user ?? fallbackUsername).trim();
   if (!username) return null;
-  const roleRaw = String(raw.role ?? 'staff').toLowerCase();
+  const roleRaw = String(raw.role ?? raw.Role ?? 'staff').toLowerCase();
   const role: UserRole = roleRaw === 'admin' ? 'admin' : 'staff';
-  const resolvedName =
-    String(raw.name ?? '').trim() ||
-    String(raw.displayName ?? '').trim() ||
-    username;
+  const rawName =
+    String(raw.name ?? raw.Name ?? '').trim() ||
+    String(raw.displayName ?? raw.DisplayName ?? '').trim();
   return {
     username,
-    name: resolvedName,
-    displayName: resolvedName,
+    name: rawName,
+    displayName: rawName || username,
     role,
   };
 }
+
+export function syncCurrentUserFromUsers(
+  currentUser: SessionUser | null,
+  fetchedUsers: ReadonlyArray<Pick<UserAccount, 'username' | 'name' | 'displayName' | 'role'>>
+): SessionUser | null {
+  if (!currentUser) return null;
+  const targetUsername = currentUser.username.trim().toLowerCase();
+  const match = fetchedUsers.find((u) => u.username.trim().toLowerCase() === targetUsername);
+  if (!match) return currentUser;
+
+  const latestName = String(match.name ?? '').trim() || String(match.displayName ?? '').trim();
+  const nextName = latestName || currentUser.name;
+  const nextDisplayName = nextName || currentUser.username;
+
+  if (
+    nextName === currentUser.name &&
+    nextDisplayName === currentUser.displayName &&
+    match.role === currentUser.role
+  ) {
+    return currentUser;
+  }
+
+  return {
+    ...currentUser,
+    name: nextName,
+    displayName: nextDisplayName,
+    role: match.role,
+  };
+}
+
 
 

@@ -14,6 +14,7 @@ import {
   normalizeSettings,
   resolveCashierName,
   resolveDocumentTitle,
+  syncCurrentUserFromUsers,
 } from './posLogic';
 import {
   DARK_THEME_PRESETS,
@@ -165,13 +166,34 @@ test('resolveCashierName and normalizeSessionUser handle name, displayName, empt
   });
 
   const fromGasUsernameOnly = normalizeSessionUser({ username: 'admin', name: '', role: 'admin' });
-  assert.equal(fromGasUsernameOnly?.name, 'admin');
+  assert.equal(fromGasUsernameOnly?.name, '');
   assert.equal(fromGasUsernameOnly?.displayName, 'admin');
+  assert.equal(resolveCashierName(fromGasUsernameOnly), 'admin');
 
   assert.equal(resolveCashierName({ name: 'น้องมายด์', username: 'staff01' }), 'น้องมายด์');
   assert.equal(resolveCashierName({ name: '', displayName: '', username: 'staff01' }), 'staff01');
   assert.equal(resolveCashierName(null, 'Staff'), 'Staff');
   assert.equal(resolveCashierName(null, ''), '');
 });
+
+test('syncCurrentUserFromUsers syncs latest Google Sheets name column onto currentUser immediately', () => {
+  const initialSession = {
+    username: 'ploy01',
+    name: '',
+    displayName: 'ploy01',
+    role: 'admin' as const,
+  };
+  const updated = syncCurrentUserFromUsers(initialSession, [
+    { username: 'ploy01', name: 'พลอย (เจ้าของร้าน)', displayName: 'พลอย (เจ้าของร้าน)', role: 'admin' },
+    { username: 'staff01', name: 'น้องบีม', displayName: 'น้องบีม', role: 'staff' },
+  ]);
+  assert.deepEqual(updated, {
+    username: 'ploy01',
+    name: 'พลอย (เจ้าของร้าน)',
+    displayName: 'พลอย (เจ้าของร้าน)',
+    role: 'admin',
+  });
+});
+
 
 

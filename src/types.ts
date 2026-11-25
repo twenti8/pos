@@ -48,6 +48,7 @@ export interface UserAccount {
   id: string;
   username: string;
   password?: string;
+  name?: string;
   displayName: string;
   role: UserRole;
   active?: boolean;

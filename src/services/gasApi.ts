@@ -159,7 +159,7 @@ export async function loginWithGas(
 
   const normalized = normalizeSessionUser(root, username.trim());
   const resolvedUsername = normalized?.username || username.trim();
-  const resolvedName = normalized?.name || resolvedUsername;
+  const resolvedName = normalized?.name || '';
   const role = normalized?.role || 'staff';
 
   return {
@@ -167,7 +167,7 @@ export async function loginWithGas(
     user: {
       username: resolvedUsername,
       name: resolvedName,
-      displayName: resolvedName,
+      displayName: resolvedName || resolvedUsername,
       role,
     },
   };

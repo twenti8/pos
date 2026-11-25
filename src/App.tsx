@@ -26,6 +26,7 @@ import {
   normalizeSessionUser,
   resolveCashierName,
   resolveDocumentTitle,
+  syncCurrentUserFromUsers,
 } from './utils/posLogic';
 import {
   deleteUserFromCloud,
@@ -233,9 +234,27 @@ export default function App() {
     [notify, settings]
   );
 
-  // Sync on initial app mount
+  const syncUsersAndCurrentUserFromCloud = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setIsLoadingUsers(true);
+    const res = await fetchUsersFromCloud();
+    if (showSpinner) setIsLoadingUsers(false);
+    if (res.ok && res.users && res.users.length > 0) {
+      setUsers(res.users);
+      writeStorage(STORAGE_KEYS.users, res.users);
+      setCurrentUser((prev) => {
+        const synced = syncCurrentUserFromUsers(prev, res.users!);
+        if (synced && synced !== prev) {
+          writeStorage(STORAGE_KEYS.session, synced);
+        }
+        return synced;
+      });
+    }
+  }, []);
+
+  // Sync on initial app mount (init data + latest Users tab names)
   useEffect(() => {
     void loadInitDataFromCloud(true);
+    void syncUsersAndCurrentUserFromCloud(false);
   }, []);
 
   // Ensure staff cannot stay on admin tabs
@@ -254,19 +273,20 @@ export default function App() {
     const res = await loginWithGas(username, password);
 
     if (res.ok && res.user) {
-      const resolvedDisplayName = resolveCashierName(res.user, res.user.username);
+      const sheetName = res.user.name?.trim() || '';
       const loggedInUser: SessionUser = {
         username: res.user.username,
-        name: resolvedDisplayName,
-        displayName: resolvedDisplayName,
+        name: sheetName,
+        displayName: sheetName || res.user.username,
         role: res.user.role,
       };
       setCurrentUser(loggedInUser);
       writeStorage(STORAGE_KEYS.session, loggedInUser);
       setActiveTab('pos');
-      notify('success', `ยินดีต้อนรับคุณ ${loggedInUser.name}`);
-      // Sync immediately right after login so every device has latest cloud state
+      notify('success', `ยินดีต้อนรับคุณ ${loggedInUser.name || loggedInUser.username}`);
+      // Sync immediately right after login so every device has latest cloud state & user name
       void loadInitDataFromCloud(true);
+      void syncUsersAndCurrentUserFromCloud(false);
       return null;
     }
 
@@ -278,17 +298,17 @@ export default function App() {
           (u.password === password || (u.username === 'admin' && password === '1234'))
       );
       if (localMatch) {
-        const resolvedDisplayName = resolveCashierName(localMatch, localMatch.username);
+        const matchedName = String(localMatch.name ?? '').trim() || String(localMatch.displayName ?? '').trim();
         const offlineUser: SessionUser = {
           username: localMatch.username,
-          name: resolvedDisplayName,
-          displayName: resolvedDisplayName,
+          name: matchedName,
+          displayName: matchedName || localMatch.username,
           role: localMatch.role,
         };
         setCurrentUser(offlineUser);
         writeStorage(STORAGE_KEYS.session, offlineUser);
         setActiveTab('pos');
-        notify('info', `เข้าสู่ระบบแบบออฟไลน์ในชื่อ ${offlineUser.name}`);
+        notify('info', `เข้าสู่ระบบแบบออฟไลน์ในชื่อ ${offlineUser.name || offlineUser.username}`);
         return null;
       }
     }
@@ -364,7 +384,8 @@ export default function App() {
       subtotal: Math.round(item.product.price * item.quantity * 100) / 100,
     }));
 
-    const cashierDisplayName = resolveCashierName(currentUser, 'Staff');
+    const cashierDisplayName =
+      currentUser?.name?.trim() || currentUser?.username?.trim() || 'Staff';
 
     const newOrder: OrderRecord = {
       receiptId: generateReceiptId(),
@@ -395,7 +416,10 @@ export default function App() {
       if (!targetOrder) return;
 
       const resolvedCashier =
-        resolveCashierName(currentUser, '') || targetOrder.cashierName?.trim() || '';
+        currentUser?.name?.trim() ||
+        currentUser?.username?.trim() ||
+        targetOrder.cashierName?.trim() ||
+        '';
 
       const res = await saveOrderToCloud({
         receiptId: targetOrder.receiptId,
@@ -487,30 +511,39 @@ export default function App() {
 
   // Admin: Users CRUD
   const handleRefreshUsers = async () => {
-    setIsLoadingUsers(true);
-    const res = await fetchUsersFromCloud();
-    setIsLoadingUsers(false);
-    if (res.ok && res.users && res.users.length > 0) {
-      setUsers(res.users);
-      writeStorage(STORAGE_KEYS.users, res.users);
-    }
+    await syncUsersAndCurrentUserFromCloud(true);
   };
 
   const handleSaveUser = async (user: UserAccount) => {
+    const cleanName = user.displayName?.trim() || user.name?.trim() || '';
+    const normalizedUser: UserAccount = {
+      ...user,
+      name: cleanName,
+      displayName: cleanName || user.username,
+    };
+
     setUsers((prev) => {
-      const exists = prev.some((u) => u.username === user.username);
+      const exists = prev.some((u) => u.username === normalizedUser.username);
       const next = exists
-        ? prev.map((u) => (u.username === user.username ? user : u))
-        : [...prev, user];
+        ? prev.map((u) => (u.username === normalizedUser.username ? normalizedUser : u))
+        : [...prev, normalizedUser];
       writeStorage(STORAGE_KEYS.users, next);
       return next;
     });
 
-    const res = await saveUserToCloud(user);
+    setCurrentUser((prev) => {
+      const synced = syncCurrentUserFromUsers(prev, [normalizedUser]);
+      if (synced && synced !== prev) {
+        writeStorage(STORAGE_KEYS.session, synced);
+      }
+      return synced;
+    });
+
+    const res = await saveUserToCloud(normalizedUser);
     if (res.ok) {
-      notify('success', `บันทึกผู้ใช้งาน @${user.username} ลง Google Sheets แล้ว`);
+      notify('success', `บันทึกผู้ใช้งาน @${normalizedUser.username} ลง Google Sheets แล้ว`);
     } else {
-      notify('info', `บันทึกผู้ใช้งาน @${user.username} ในเครื่องแล้ว (รอเชื่อมต่อคลาวด์)`);
+      notify('info', `บันทึกผู้ใช้งาน @${normalizedUser.username} ในเครื่องแล้ว (รอเชื่อมต่อคลาวด์)`);
     }
   };
 
