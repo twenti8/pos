@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Mali", "Itim", ui-rounded, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", "Mali", monospace;
+}
+
+:root {
+  --theme-bg: #F4FAFF;
+  --theme-surface: #FFFFFF;
+  --theme-soft: #E0F1FE;
+  --theme-soft-hover: #CBE6FC;
+  --theme-border: #C2E2FA;
+  --theme-primary: #1E7CC2;
+  --theme-primary-hover: #1767A4;
+  --theme-primary-text: #FFFFFF;
+  --theme-accent-ink: #155B91;
+  --theme-ink: #172736;
+  --theme-muted: #526A7F;
+  --theme-success: #1F7A3E;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  background-color: var(--theme-bg);
+  color: var(--theme-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.font-receipt-mono,
+#printable-receipt {
+  font-family: "JetBrains Mono", "Mali", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Thermal receipt clean printing */
+@media print {
+  @page {
+    margin: 6mm;
+    size: 80mm auto;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible !important;
+  }
+
+  #printable-receipt {
+    position: fixed !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 8px !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+  }
+}

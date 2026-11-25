@@ -1,0 +1,6 @@
+{
+  "name": "finedaevibe. POS",
+  "description": "ระบบขายหน้าร้านคาเฟ่น่ารัก พร้อมซิงก์ Google Sheets และคิวอาร์พร้อมเพย์อัตโนมัติ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
