@@ -4,6 +4,7 @@ import {
   buildItemsSummary,
   calculateCartTotals,
   calculateChange,
+  canDeleteUserAccount,
   formatBaht,
   formatThaiDateTime,
   generateReceiptId,
@@ -133,3 +134,19 @@ test('isGifFile accurately detects GIF MIME types and filenames', () => {
   assert.equal(isGifFile({ type: '', name: 'banner.GIF' }), true);
   assert.equal(isGifFile({ type: 'image/png', name: 'logo.png' }), false);
 });
+
+test('canDeleteUserAccount allows deleting default admin when another admin exists and blocks deleting last admin', () => {
+  const defaultAdmin = { id: 'admin', username: 'admin', role: 'admin' as const };
+  const secondAdmin = { id: 'owner', username: 'owner', role: 'admin' as const };
+  const staffUser = { id: 'staff01', username: 'staff01', role: 'staff' as const };
+
+  // Two admins present: default 'admin' CAN be deleted
+  assert.equal(canDeleteUserAccount(defaultAdmin, [defaultAdmin, secondAdmin, staffUser]).allowed, true);
+  assert.equal(canDeleteUserAccount(secondAdmin, [defaultAdmin, secondAdmin, staffUser]).allowed, true);
+  assert.equal(canDeleteUserAccount(staffUser, [defaultAdmin, staffUser]).allowed, true);
+
+  // Only one admin remaining: deleting the last admin is blocked regardless of username
+  assert.equal(canDeleteUserAccount(defaultAdmin, [defaultAdmin, staffUser]).allowed, false);
+  assert.equal(canDeleteUserAccount(secondAdmin, [secondAdmin, staffUser]).allowed, false);
+});
+

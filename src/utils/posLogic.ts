@@ -297,3 +297,23 @@ export function normalizeOrder(raw: Record<string, unknown>, index = 0): OrderRe
     syncedToCloud: raw.syncedToCloud !== undefined ? Boolean(raw.syncedToCloud) : true,
   };
 }
+
+export function canDeleteUserAccount(
+  target: Pick<UserAccount, 'id' | 'username' | 'role'>,
+  users: ReadonlyArray<Pick<UserAccount, 'id' | 'username' | 'role'>>
+): { allowed: boolean; reason?: string } {
+  if (target.role === 'admin') {
+    const targetUsername = target.username.trim().toLowerCase();
+    const otherAdmins = users.filter(
+      (u) => u.role === 'admin' && u.username.trim().toLowerCase() !== targetUsername
+    );
+    if (otherAdmins.length < 1) {
+      return {
+        allowed: false,
+        reason: 'ต้องมีบัญชีแอดมิน (Admin) เหลืออย่างน้อย 1 บัญชี เพื่อป้องกันการล็อกเอาต์ออกจากระบบ',
+      };
+    }
+  }
+  return { allowed: true };
+}
+

@@ -20,6 +20,7 @@ import {
 import {
   buildItemsSummary,
   calculateCartTotals,
+  canDeleteUserAccount,
   extractCategories,
   generateReceiptId,
   resolveDocumentTitle,
@@ -495,8 +496,15 @@ export default function App() {
   };
 
   const handleDeleteUser = async (user: UserAccount) => {
+    const check = canDeleteUserAccount(user, users);
+    if (!check.allowed) {
+      notify('error', check.reason || 'ต้องมีบัญชีแอดมิน (Admin) เหลืออย่างน้อย 1 บัญชี');
+      return;
+    }
+
+    const targetUsername = user.username.trim().toLowerCase();
     setUsers((prev) => {
-      const next = prev.filter((u) => u.username !== user.username);
+      const next = prev.filter((u) => u.username.trim().toLowerCase() !== targetUsername);
       writeStorage(STORAGE_KEYS.users, next);
       return next;
     });

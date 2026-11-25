@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { UserPlus, Trash2, Pencil, RefreshCw, X, Loader2, Shield, User } from 'lucide-react';
 import { SessionUser, UserAccount, UserRole } from '../types';
+import { canDeleteUserAccount } from '../utils/posLogic';
 
 interface UsersAdminViewProps {
   currentUser: SessionUser;
@@ -79,8 +80,9 @@ export function UsersAdminView({
   };
 
   const handleDelete = async (target: UserAccount) => {
-    if (target.username === currentUser.username) {
-      onNotify('error', 'ไม่สามารถลบบัญชีที่กำลังใช้งานอยู่ได้');
+    const check = canDeleteUserAccount(target, users);
+    if (!check.allowed) {
+      onNotify('error', check.reason || 'ต้องมีบัญชีแอดมิน (Admin) เหลืออย่างน้อย 1 บัญชี');
       return;
     }
     await onDeleteUser(target);
@@ -127,6 +129,7 @@ export function UsersAdminView({
         <div className="divide-y divide-[var(--theme-border)]/70">
           {users.map((u) => {
             const isSelf = u.username === currentUser.username;
+            const deleteCheck = canDeleteUserAccount(u, users);
             return (
               <div
                 key={u.id || u.username}
@@ -163,7 +166,8 @@ export function UsersAdminView({
                   <button
                     type="button"
                     onClick={() => void handleDelete(u)}
-                    disabled={isSelf}
+                    disabled={!deleteCheck.allowed}
+                    title={deleteCheck.allowed ? `ลบผู้ใช้ ${u.username}` : deleteCheck.reason}
                     aria-label={`ลบผู้ใช้ ${u.username}`}
                     className="h-9 w-9 rounded-xl text-[var(--theme-muted)] hover:text-[#C92A2A] hover:bg-[#FFF5F5] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
                   >
